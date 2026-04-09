@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treasure Hunt</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="teamGate" class="overlay">
+    <div class="gateCard">
+      <button type="button" id="gateRabbitTrigger" class="gateRabbitBtn" aria-label="Admin access">🧭</button>
+      <div class="badge bigBadge">🧭 Pick your team</div>
+      <div class="gateStepRail">
+        <div class="gateStep">
+          <span>1</span>
+          <div><strong>Claim a team</strong><small>Pick the squad for this device.</small></div>
+        </div>
+        <div class="gateStep">
+          <span>2</span>
+          <div><strong>Name the crew</strong><small>Choose a mascot and rally name.</small></div>
+        </div>
+        <div class="gateStep">
+          <span>3</span>
+          <div><strong>Start the hunt</strong><small>Scan the right checkpoint and stay ahead.</small></div>
+        </div>
+      </div>
+      <h1 class="gateTitle">Welcome to the Treasure Hunt</h1>
+      <p class="gateCopy">Create a team with a mascot and a random clue order, or join one that already exists. This device will remember its team after the first join.</p>
+      <div class="gateModeSwitch" id="gateModeSwitch">
+        <button type="button" class="gateModeBtn active" id="gateModeJoinBtn">Join a team</button>
+        <button type="button" class="gateModeBtn" id="gateModeCreateBtn">Create a team</button>
+      </div>
+      <div class="small gatePrompt" id="gateSelectionStatus">Choose an existing team to join.</div>
+      <div class="gateJoinWrap" id="gateJoinWrap">
+        <div class="teamButtons" id="gateTeamButtons"></div>
+        <div class="small emptyJoinNote hidden" id="emptyJoinNote">No teams have been created yet. Switch to Create a team to start the hunt.</div>
+      </div>
+      <div class="gateCreateWrap hidden" id="gateCreateWrap">
+        <div class="spacer"></div>
+        <div class="gateIdentityGrid">
+          <div>
+            <label class="small" for="gateTeamName">Team name</label>
+            <input id="gateTeamName" placeholder="Enter team name">
+          </div>
+          <div>
+            <label class="small" for="gateMascotSelect">Mascot</label>
+            <select id="gateMascotSelect" class="visuallyHidden"></select>
+            <div id="gateMascotCards" class="mascotCardGrid" role="listbox" aria-label="Mascot choices"></div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div id="gateMascotPreview" class="mascotPreviewCard"></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="gateDeviceTools">
+        <div class="note gateDeviceNote" id="gateDeviceNote">This phone will remember its team after an admin approves leaving the device.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="primary full" id="startGameBtn">Join hunt</button>
+    </div>
+  </div>
+
+  <div id="adminOverlay" class="overlay hidden">
+    <div class="gateCard adminCard">
+      <button id="adminCloseX" class="adminCloseX" aria-label="Close">×</button>
+      <div class="badge bigBadge">🔐 Admin access</div>
+      <h1 class="gateTitle">Admin controls</h1>
+      <p class="gateCopy">Enter the admin passcode to unlock management tools.</p>
+      <input id="adminPasscode" placeholder="Enter admin passcode">
+      <div class="spacer"></div>
+      <button class="primary full" id="adminUnlockBtn">Unlock admin</button>
+      <div class="spacer"></div>
+      <div class="warn" id="adminFeedback">Admin tools are hidden from players.</div>
+    </div>
+  </div>
+
+  <div id="adminPanel" class="overlay hidden">
+    <div class="gateCard adminPanelCard">
+      <button id="adminPanelCloseX" class="adminCloseX" aria-label="Close">×</button>
+      <div class="badge bigBadge">🛠️ Admin tools</div>
+      <h1 class="gateTitle">Manage teams</h1>
+      <p class="gateCopy">These controls are hidden from players.</p>
+      <div class="adminStatusBlock">
+        <h2 class="adminStatusTitle">Team status</h2>
+        <div id="adminStatusList" class="adminStatusList"></div>
+      </div>
+      <div class="panel">
+        <select id="adminTeamSelect"></select>
+        <input id="adminTeamName" placeholder="Admin set team name">
+        <button class="primary full" id="adminSaveNameBtn">Save team name</button>
+        <button class="full" id="adminReloadTeamBtn">Reload team progress</button>
+        <button class="full" id="adminCopySnapshotBtn">Copy status snapshot</button>
+        <button class="full" id="adminLeaveDeviceBtn">Leave this device</button>
+        <button class="primary full" id="adminGrantNextBtn">Grant next clue</button>
+        <button class="full" id="adminGrantHintBtn">Grant 1 extra hint</button>
+        <button class="full" id="adminSkipHintTimerBtn">Skip hint timer</button>
+        <button class="full" id="adminResetTeamBtn">Reset selected team</button>
+        <button class="full dangerBtn" id="adminResetAllBtn">Reset full game</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="note" id="adminPanelFeedback">Choose a team to manage.</div>
+    </div>
+  </div>
+
+  <div id="missionOverlay" class="overlay hidden">
+    <div class="gateCard missionCard">
+      <button id="missionCloseX" class="adminCloseX" aria-label="Close">×</button>
+      <div class="missionStamp" id="missionStamp">CASE FILE OPENED</div>
+      <div class="badge" id="missionBadge">✅ Mission update</div>
+      <h1 class="gateTitle" id="missionTitle">Mission unlocked</h1>
+      <p class="gateCopy" id="missionCopy">You cracked the QR and unlocked your next stop.</p>
+      <div class="missionFlavor" id="missionFlavor">A fresh page just slid out of the dossier.</div>
+      <div class="missionMeta" id="missionMeta">Head back to the mission board for your next riddle.</div>
+      <div class="spacer"></div>
+      <button class="primary full" id="missionActionBtn">Keep hunting</button>
+    </div>
+  </div>
+
+  <div id="victoryOverlay" class="overlay hidden">
+    <div class="gateCard victoryCard">
+      <button id="victoryCloseX" class="adminCloseX" aria-label="Close">×</button>
+      <div class="badge bigBadge">🏆 Victory!</div>
+      <h1 class="gateTitle" id="victoryTitle">You finished the hunt!</h1>
+      <p class="gateCopy" id="victoryPlacement">Your team came in first place.</p>
+      <div class="victoryRank" id="victoryRankWord">First place</div>
+      <div class="victoryMeta" id="victoryMeta">The leaderboard has been updated.</div>
+      <div class="spacer"></div>
+      <button class="primary full" id="victoryLeaderboardBtn">View standings</button>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="topbarInner">
+      <div class="brand"><button type="button" id="rabbitTrigger" class="rabbitBtn" aria-label="Admin access">🧭</button><span>Treasure Hunt</span></div>
+      <nav class="menu">
+        <button class="menuBtn active" data-page="choresPage">Mission board</button>
+        <button class="menuBtn" data-page="scanPage">Scanner</button>
+        <button class="menuBtn" data-page="mapPage">Standings</button>
+      </nav>
+    </div>
+  </header>
+
+  <div class="commandStrip">
+    <div class="commandStripInner">
+      <div class="commandCopy">
+        <div class="teamPill commandTeamPill" id="deviceTeamBadge">No team on this device</div>
+        <div class="commandMeta" id="deviceStatusMeta">Choose a team, claim a mascot, and start the hunt.</div>
+      </div>
+      <div class="commandActions">
+        <div class="syncBadge syncPending" id="syncBadge">Connecting to shared game...</div>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="hero card">
+      <div class="badge">🗝️ Treasure Hunt</div>
+      <h1>Decode clues, outpace the other teams, and lock in the win.</h1>
+      <p>Each QR code unlocks only the next clue for your team. This device remembers its team after the first join so players can jump straight back into the race.</p>
+      <div class="fieldGuide">
+        <div class="fieldGuideRow">
+          <div class="fieldGuideLabel">Field guide</div>
+          <div class="teamThemePill" id="teamThemePill">Mascot theme waiting</div>
+        </div>
+        <div class="heroChecklist">
+          <div class="heroStep">1. Pick your team.</div>
+          <div class="heroStep">2. Crack the current riddle.</div>
+          <div class="heroStep">3. Scan the exact QR for your next unlock.</div>
+          <div class="heroStep">4. Finish fast and claim a top-place prize.</div>
+        </div>
+      </div>
+      <div class="kpis">
+        <div class="kpi kpiGreen">
+          <div class="small">Progress</div>
+          <strong id="progressCount">0 / 10</strong>
+          <div class="progress"><div id="progressBar" style="width:0%"></div></div>
+          <div id="eggProgress" class="eggProgress" aria-hidden="true"></div>
+        </div>
+        <div class="kpi kpiAmber">
+          <div class="small">Hints used</div>
+          <strong id="hintCount">0 / 3</strong>
+          <div class="muted" id="hintStatus">Hint ready</div>
+        </div>
+      </div>
+      <div id="finalEggCard" class="finalEggCard hidden">
+        <div>
+          <div class="badge finalEggBadge" id="finalEggBadge">🏁 Final checkpoint ready</div>
+          <h2 id="finalEggTitle">Find the last checkpoint!</h2>
+          <p id="finalEggCopy">After your 10th QR code, the final clue will appear here.</p>
+        </div>
+        <div class="finalEggActions">
+          <button class="primary finalEggBtn hidden" id="claimVictoryBtn">I found the final checkpoint!</button>
+          <button class="finalEggBtn hidden" id="viewVictoryBtn">View victory page</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="choresPage" class="page activePage">
+      <div class="mainGrid" id="mapPageGrid">
+        <div class="card" id="mapCard">
+          <div class="sectionTitleRow">
+            <h2>Mission board</h2>
+            <div class="teamPill" id="teamDisplay"></div>
+          </div>
+          <p>The next stop is hidden somewhere in the course. Solve each mission, crack the QR, and keep moving before another team catches up.</p>
+          <div class="list" id="choreList"></div>
+        </div>
+        <div class="sideCol">
+          <div class="card panel" id="hintStationCard">
+            <div class="sectionTitleRow">
+              <h2>Backup</h2>
+              <div class="hintActionRow">
+                <button class="amber" id="hintBtn">Use hint</button>
+                <span class="timerPill" id="hintTimerPill" hidden>10:00</span>
+              </div>
+            </div>
+            <div class="small" id="hintsLeft">Hints left: 3</div>
+            <div class="note">The host can grant an extra hint or skip the hint timer if your event rules allow it.</div>
+            <div class="warn" id="hintBox">No hint displayed yet for this active clue.</div>
+            <details class="hintRules">
+              <summary>Hint rules</summary>
+              <div class="small">Each team starts with 3 hints. After you use one, the next hint goes on a 10-minute cooldown unless the host grants an extra hint or skips the timer.</div>
+            </details>
+          </div>
+          <div class="note" id="feedbackBox">Ready to play.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="scanPage" class="page">
+      <div class="scanWrap">
+        <div class="card panel scanCard">
+          <h2>Checkpoint scanner</h2>
+          <div class="muted" id="scanMessage">Line up the QR code in the camera and take a picture.</div>
+          <div class="cameraActions">
+            <button id="takePhotoBtn" type="button">Take picture</button>
+            <button id="retakePhotoBtn" type="button">Retake</button>
+          </div>
+          <div class="muted cameraNote" id="cameraNote">Best results: fill most of the frame with the QR code and avoid glare.</div>
+          <div class="photoBox">
+            <div id="qr-reader" class="qrReader photoReader">
+              <video id="qrVideo" class="previewVideo" playsinline autoplay muted></video>
+              <canvas id="qrCanvas" class="previewCanvas hidden"></canvas>
+              <div class="photoPlaceholder" id="photoPlaceholder">Camera will start automatically on this page.</div>
+            </div>
+          </div>
+          <div id="scanStatusBox" class="scanStatus scanStatusIdle">Camera will open automatically.</div>
+          <div class="small scanInsight" id="scanInsight">Wrong-scan tips and cross-team clues will show here.</div>
+          <input id="manualCode" placeholder="Paste or type QR code value">
+          <button class="primary" id="unlockBtn">Check code</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="mapPage" class="page">
+      <div class="mainGrid mapPageLeaderboardOnly" id="mapPageGrid">
+        <div class="card panel">
+          <h2>Standings</h2>
+          <div id="leadBanner" class="leadBanner">The race is on.</div>
+          <div id="activityTicker" class="activityTicker">Rival movement and admin updates will appear here.</div>
+          <div id="leaderboardModeText" class="leaderStatus" hidden></div>
+          <div id="sharedModeText" class="leaderStatus" hidden></div>
+          <div class="leader" id="leaderboard"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script src="script-part-1.js"></script>
+  <script src="script-part-2.js"></script>
+  <script src="script-part-3.js"></script>
+  <script src="script-part-4.js"></script>
+</body>
+</html>
