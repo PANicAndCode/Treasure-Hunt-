@@ -4,7 +4,7 @@ This package is a reusable QR-based hunt site with unlimited custom teams, join-
 
 ## What is included
 - Website files (`index.html`, `styles.css`, `config.js`, `supabase-config.js`)
-- Split runtime files (`script-part-1.js` through `script-part-4.js`) for GitHub Pages deployment
+- Split runtime files (`script-part-1.js` through `script-part-4.js`) for deployment
 - `treasure_hunt_setup.sql` for a brand-new Supabase setup
 - `leaderboard_and_progress_setup.sql` as an alternate full setup file
 - `dynamic_teams_migration.sql` for upgrading an older fixed-team database
