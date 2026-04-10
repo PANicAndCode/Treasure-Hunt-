@@ -210,6 +210,145 @@ function getCachedClaimedTeamName(team){
   return null;
 }
 
+function presetStorageMessage(){
+  if (supabaseReady && gamePresetStorageReady) return "Saved presets sync across devices.";
+  if (supabaseReady) return "Run the updated SQL once to sync presets across devices.";
+  return "Supabase is not configured, so presets stay on this device only.";
+}
+
+function presetStorageMissing(error){
+  return error?.code === "42P01"
+    || error?.code === "PGRST205"
+    || /game_presets_treasure_hunt/i.test(String(error?.message || ""));
+}
+
+function replacePresetCache(records = [], preferredActiveId = null){
+  const nextCache = { [DEFAULT_GAME_PRESET_ID]: defaultPresetRecord() };
+  (records || []).forEach(entry => {
+    const normalized = normalizePresetRecord(entry);
+    nextCache[normalized.presetId] = normalized;
+  });
+  const remoteActiveId = Object.values(nextCache).find(entry => entry.isActive)?.presetId || null;
+  const nextActiveId = nextCache[preferredActiveId] ? preferredActiveId
+    : nextCache[remoteActiveId] ? remoteActiveId
+    : nextCache[activeGamePresetId] ? activeGamePresetId
+    : DEFAULT_GAME_PRESET_ID;
+  gamePresetsCache = nextCache;
+  applyPresetClues(nextActiveId);
+}
+
+async function fetchGamePresets(options = {}){
+  if (!supabaseReady) return presetList();
+  const { data, error } = await supabaseClient.from(GAME_PRESETS_TABLE).select("*");
+  if (error){
+    console.error(error);
+    if (presetStorageMissing(error)) gamePresetStorageReady = false;
+    renderAdminPresetStatus();
+    if (typeof renderAdminPresetManager === "function") renderAdminPresetManager();
+    return presetList();
+  }
+  gamePresetStorageReady = true;
+  replacePresetCache(data || [], options.preferredActiveId || null);
+  renderAdminPresetStatus();
+  if (typeof renderAdminPresetManager === "function") renderAdminPresetManager();
+  if (options.rerender !== false) await renderAll({ persist: false });
+  return presetList();
+}
+
+function subscribeGamePresets(){
+  if (!supabaseReady) return;
+  supabaseClient.channel("game-presets-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: GAME_PRESETS_TABLE }, () => {
+      fetchGamePresets().catch(console.error);
+    }).subscribe();
+}
+
+async function savePresetRecord(record, options = {}){
+  const activate = !!options.activate;
+  const candidate = normalizePresetRecord(record, record?.presetId || DEFAULT_GAME_PRESET_ID);
+  const timestamp = Date.now();
+  const nextRecord = {
+    ...candidate,
+    createdAt: Number(candidate.createdAt || timestamp),
+    updatedAt: timestamp,
+    isActive: activate ? true : candidate.presetId === activeGamePresetId
+  };
+
+  if (activate) {
+    Object.values(gamePresetsCache).forEach(entry => { entry.isActive = false; });
+  }
+  gamePresetsCache[nextRecord.presetId] = nextRecord;
+
+  if (nextRecord.isActive) applyPresetClues(nextRecord.presetId);
+  else saveLocalPresetCache();
+
+  if (!supabaseReady || !gamePresetStorageReady) {
+    return { ok: true, localOnly: true, preset: nextRecord };
+  }
+
+  if (activate) {
+    const deactivate = await supabaseClient.from(GAME_PRESETS_TABLE).update({ is_active: false }).neq("preset_id", "__never__");
+    if (deactivate.error){
+      console.error(deactivate.error);
+      return { ok: false, error: deactivate.error, preset: nextRecord };
+    }
+  }
+
+  const payload = {
+    preset_id: nextRecord.presetId,
+    preset_name: nextRecord.presetName,
+    clues: nextRecord.clues,
+    is_active: nextRecord.isActive,
+    created_at: nextRecord.createdAt,
+    updated_at: nextRecord.updatedAt
+  };
+  const { error } = await supabaseClient.from(GAME_PRESETS_TABLE).upsert(payload, { onConflict: "preset_id" });
+  if (error){
+    console.error(error);
+    if (presetStorageMissing(error)) gamePresetStorageReady = false;
+    return { ok: false, error, preset: nextRecord };
+  }
+
+  gamePresetStorageReady = true;
+  gamePresetsCache[nextRecord.presetId] = normalizePresetRecord(payload, payload.preset_id);
+  if (nextRecord.isActive) applyPresetClues(nextRecord.presetId);
+  else saveLocalPresetCache();
+  return { ok: true, localOnly: false, preset: gamePresetsCache[nextRecord.presetId] };
+}
+
+async function deletePresetRecord(presetIdValue){
+  const presetIdText = String(presetIdValue || "").trim();
+  if (!presetIdText || !gamePresetsCache[presetIdText]) {
+    return { ok: false, error: new Error("Preset not found.") };
+  }
+
+  const wasActive = presetIdText === activeGamePresetId;
+  delete gamePresetsCache[presetIdText];
+  if (!Object.keys(gamePresetsCache).length) gamePresetsCache[DEFAULT_GAME_PRESET_ID] = defaultPresetRecord();
+
+  const fallbackPreset = presetList()[0] || defaultPresetRecord();
+  if (wasActive) applyPresetClues(fallbackPreset.presetId);
+  else saveLocalPresetCache();
+
+  if (!supabaseReady || !gamePresetStorageReady) {
+    return { ok: true, localOnly: true, fallbackPresetId: fallbackPreset.presetId };
+  }
+
+  const { error } = await supabaseClient.from(GAME_PRESETS_TABLE).delete().eq("preset_id", presetIdText);
+  if (error){
+    console.error(error);
+    if (presetStorageMissing(error)) gamePresetStorageReady = false;
+    return { ok: false, error, fallbackPresetId: fallbackPreset.presetId };
+  }
+
+  if (wasActive && fallbackPreset) {
+    const activationResult = await savePresetRecord(presetById(fallbackPreset.presetId), { activate: true });
+    return { ...activationResult, fallbackPresetId: fallbackPreset.presetId };
+  }
+
+  return { ok: true, localOnly: false, fallbackPresetId: fallbackPreset.presetId };
+}
+
 function describeSharedProgressChange(team, previous, next){
   if (!next || team === SHARED_SETTINGS_TEAM_ID) return null;
   const identity = teamIdentity(next.teamName, team);
@@ -254,11 +393,12 @@ async function initSupabase(){
       el("leaderboardModeText").hidden = true;
       el("leaderboardModeText").style.display = "none";
     }
-    await Promise.allSettled([fetchLeaderboard(), fetchAllRemoteProgress()]);
+    await Promise.allSettled([fetchLeaderboard(), fetchAllRemoteProgress(), fetchGamePresets({ rerender: false })]);
     setSyncState("live", "Shared progress is live across devices.");
     updateSharedModeText();
     subscribeLeaderboard();
     subscribeTeamProgress();
+    subscribeGamePresets();
   } catch (error){
     console.error(error);
     supabaseReady = false;
@@ -663,6 +803,7 @@ function renderBoard(){
   board.innerHTML = "";
   renderLeadBanner(rows);
   renderActivityTicker();
+  renderAdminPresetStatus();
   rows.forEach((row, i) => {
     const place = i + 1;
     const trophy = row.finished ? trophyInfoForPlacement(place) : null;
@@ -695,6 +836,7 @@ function renderAdminStatuses(){
   const mount = el("adminStatusList");
   if (!mount) return;
   mount.innerHTML = "";
+  renderAdminPresetStatus();
   const teams = joinableTeamSummaries();
   if (!teams.length){
     mount.innerHTML = `<div class="note">No teams have been created yet.</div>`;
@@ -742,7 +884,7 @@ async function renderAll(options = {}){
   renderBoard();
   renderDeviceState();
   renderSyncBadge();
+  renderAdminPresetStatus();
   updateFinalMissionMode();
   if (shouldPersist) await persistAll();
 }
-

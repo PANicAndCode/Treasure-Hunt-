@@ -15,11 +15,17 @@ const MASCOTS = {
   cobra: { label: "Cobras", emoji: "🐍", badgeClass: "mascot-cobra", title: "Garden Strike", flavor: "Patient reads, perfect timing, and clean finishes." }
 };
 const MAP_ENABLED_KEY = `${STORAGE_PREFIX}-map-enabled`;
+const GAME_PRESETS_KEY = `${STORAGE_PREFIX}-game-presets`;
+const ACTIVE_GAME_PRESET_KEY = `${STORAGE_PREFIX}-active-game-preset`;
+const GAME_PRESETS_TABLE = "game_presets_treasure_hunt";
 const SHARED_SETTINGS_TEAM_ID = "__settings__";
 const FINAL_CLUE_ID = 11;
+const DEFAULT_GAME_PRESET_ID = "preset-default";
+const DEFAULT_GAME_PRESET_NAME = "Default Hunt";
 const LEGACY_TEAMS = typeof TEAMS === "object" ? TEAMS : {};
 const CLUE_IDS = Object.keys(CLUES).map(Number).sort((a, b) => a - b);
 const ROUTE_CLUE_IDS = CLUE_IDS.filter(id => id !== FINAL_CLUE_ID);
+const DEFAULT_CLUES = JSON.parse(JSON.stringify(CLUES));
 const CLUE_TOKEN_BY_ID = Object.freeze((() => {
   const tokenMap = {};
   Object.entries(LEGACY_TEAMS).forEach(([team, meta]) => {
@@ -48,6 +54,9 @@ let sharedActivities = [];
 let sharedDataPrimed = false;
 let audioContext = null;
 let gateMode = "join";
+let gamePresetsCache = {};
+let activeGamePresetId = DEFAULT_GAME_PRESET_ID;
+let gamePresetStorageReady = false;
 
 function el(id){ return document.getElementById(id); }
 function storageKey(team){ return `${STORAGE_PREFIX}-${team}`; }
@@ -235,7 +244,134 @@ function clueAllowsHint(clueId){
   return !!(clue && clue.hint && !clue.noHint);
 }
 
+function cloneClueValue(value){
+  return JSON.parse(JSON.stringify(value));
+}
 
+function presetId(){
+  if (window.crypto?.randomUUID) return `preset-${window.crypto.randomUUID()}`;
+  return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function defaultPresetClues(){
+  return cloneClueValue(DEFAULT_CLUES);
+}
+
+function normalizePresetClues(source){
+  const normalized = {};
+  CLUE_IDS.forEach(id => {
+    const key = String(id);
+    const fallback = DEFAULT_CLUES[key] || {};
+    const incoming = source?.[key] || source?.[id] || {};
+    normalized[key] = {
+      title: String(incoming.title || fallback.title || `Clue ${id}`).trim() || String(fallback.title || `Clue ${id}`),
+      location: String(incoming.location || fallback.location || `Checkpoint ${id}`).trim() || String(fallback.location || `Checkpoint ${id}`),
+      hint: String(incoming.hint || fallback.hint || "").trim() || String(fallback.hint || ""),
+      zone: cloneClueValue(fallback.zone || incoming.zone || {}),
+      noHint: id === FINAL_CLUE_ID ? true : !!fallback.noHint
+    };
+  });
+  return normalized;
+}
+
+function normalizePresetRecord(record = {}, fallbackId = DEFAULT_GAME_PRESET_ID){
+  const presetIdValue = String(record.presetId || record.preset_id || fallbackId || DEFAULT_GAME_PRESET_ID).trim() || DEFAULT_GAME_PRESET_ID;
+  const presetNameValue = String(record.presetName || record.preset_name || DEFAULT_GAME_PRESET_NAME).trim() || DEFAULT_GAME_PRESET_NAME;
+  return {
+    presetId: presetIdValue,
+    presetName: presetNameValue,
+    clues: normalizePresetClues(record.clues),
+    isActive: !!record.isActive || !!record.is_active,
+    createdAt: Number(record.createdAt || record.created_at || Date.now() || 0),
+    updatedAt: Number(record.updatedAt || record.updated_at || Date.now() || 0)
+  };
+}
+
+function defaultPresetRecord(){
+  return normalizePresetRecord({
+    presetId: DEFAULT_GAME_PRESET_ID,
+    presetName: DEFAULT_GAME_PRESET_NAME,
+    clues: defaultPresetClues(),
+    isActive: true,
+    createdAt: 0,
+    updatedAt: 0
+  });
+}
+
+function presetList(){
+  return Object.values(gamePresetsCache).sort((a, b) => {
+    if (a.presetId === activeGamePresetId && b.presetId !== activeGamePresetId) return -1;
+    if (b.presetId === activeGamePresetId && a.presetId !== activeGamePresetId) return 1;
+    if (a.presetId === DEFAULT_GAME_PRESET_ID && b.presetId !== DEFAULT_GAME_PRESET_ID) return -1;
+    if (b.presetId === DEFAULT_GAME_PRESET_ID && a.presetId !== DEFAULT_GAME_PRESET_ID) return 1;
+    return a.presetName.localeCompare(b.presetName);
+  });
+}
+
+function presetById(presetIdValue){
+  return gamePresetsCache[presetIdValue] || gamePresetsCache[DEFAULT_GAME_PRESET_ID] || defaultPresetRecord();
+}
+
+function saveLocalPresetCache(){
+  const payload = {
+    activePresetId: activeGamePresetId,
+    presets: Object.values(gamePresetsCache).map(preset => ({
+      presetId: preset.presetId,
+      presetName: preset.presetName,
+      clues: preset.clues,
+      isActive: preset.presetId === activeGamePresetId,
+      createdAt: preset.createdAt,
+      updatedAt: preset.updatedAt
+    }))
+  };
+  localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(payload));
+  localStorage.setItem(ACTIVE_GAME_PRESET_KEY, activeGamePresetId);
+}
+
+function applyPresetClues(presetIdValue){
+  const preset = presetById(presetIdValue);
+  activeGamePresetId = preset.presetId;
+  Object.values(gamePresetsCache).forEach(entry => {
+    entry.isActive = entry.presetId === activeGamePresetId;
+  });
+  const clues = normalizePresetClues(preset.clues);
+  Object.entries(clues).forEach(([key, clue]) => {
+    CLUES[key] = {
+      ...CLUES[key],
+      ...clue,
+      zone: cloneClueValue(DEFAULT_CLUES[key]?.zone || clue.zone || {}),
+      noHint: Number(key) === FINAL_CLUE_ID ? true : !!clue.noHint
+    };
+  });
+  saveLocalPresetCache();
+}
+
+function loadLocalPresetCache(){
+  const stored = readJson(GAME_PRESETS_KEY, null);
+  gamePresetsCache = { [DEFAULT_GAME_PRESET_ID]: defaultPresetRecord() };
+  if (stored?.presets && Array.isArray(stored.presets)) {
+    stored.presets.forEach(entry => {
+      const normalized = normalizePresetRecord(entry);
+      gamePresetsCache[normalized.presetId] = normalized;
+    });
+  }
+  const activePreset = localStorage.getItem(ACTIVE_GAME_PRESET_KEY)
+    || stored?.activePresetId
+    || presetList().find(entry => entry.isActive)?.presetId
+    || DEFAULT_GAME_PRESET_ID;
+  applyPresetClues(activePreset);
+}
+
+function activePresetRecord(){
+  return presetById(activeGamePresetId);
+}
+
+function renderAdminPresetStatus(){
+  const status = el("adminPresetStatus");
+  if (!status) return;
+  const preset = activePresetRecord();
+  status.textContent = `Active game: ${preset.presetName}`;
+}
 
 function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));

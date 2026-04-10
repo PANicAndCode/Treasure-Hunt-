@@ -46,12 +46,13 @@ p{color:var(--muted)}
 .kpi strong{font-size:30px;display:block}
 .progress{height:8px;background:#f0e3d1;border-radius:999px;overflow:hidden}
 .progress>div{height:100%;background:linear-gradient(90deg,var(--green),#6dd39a)}
-button,input,select,.buttonLike{font:inherit;border-radius:16px;padding:12px 14px}
+button,input,select,textarea,.buttonLike{font:inherit;border-radius:16px;padding:12px 14px}
 button,.buttonLike{cursor:pointer;border:1px solid #e8d7c3;background:white;text-align:center;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 button.primary,.buttonLike.primary{background:linear-gradient(180deg,#45c37e,#2fa866);color:white;border:none}
 button.amber{background:linear-gradient(180deg,#ffb84c,#f59a23);color:white;border:none}
 button:disabled{opacity:.55;cursor:not-allowed}
-input,select{border:1px solid #e4d5c4;width:100%;background:white}
+input,select,textarea{border:1px solid #e4d5c4;width:100%;background:white}
+textarea{resize:vertical;min-height:96px}
 .teamButtons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .teamBtn.selected{background:var(--pink-soft);border-color:#ffc7d8}
 .page{display:none}
@@ -135,6 +136,19 @@ input,select{border:1px solid #e4d5c4;width:100%;background:white}
 .adminStatusRow strong{display:block}
 .adminStatusMeta{font-size:13px;color:var(--muted)}
 .gateCard .menuBtn, #gateAdminBtn{justify-content:center}
+.adminPresetStatus{margin-bottom:10px}
+.adminPresetPanel{gap:14px}
+.adminPresetActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.adminClueEditor{display:grid;gap:12px}
+.adminClueCard{padding:14px;border:1px solid var(--line);border-radius:20px;background:#fffdf8;display:grid;gap:10px}
+.adminClueCard.finalClue{border-color:#ffd890;background:#fff8ea}
+.adminClueHeader{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.adminClueIndex{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:var(--theme-soft);border:1px solid var(--theme-accent);font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--theme-ink)}
+.adminClueMeta{font-size:12px;color:var(--muted)}
+.adminClueGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.adminClueLabel{display:grid;gap:6px}
+.adminClueLabel span{font-size:12px;color:var(--muted);font-weight:700}
+.adminClueLabel.fullWidth{grid-column:1 / -1}
 
 
 /* Admin access updates */
@@ -273,7 +287,7 @@ body.finalMissionMode{
 .activityTicker{margin-top:10px;padding:12px 14px;border-radius:18px;background:#fffdf8;border:1px solid #f0dfca;color:#684630;font-size:13px;font-weight:700}
 
 .leaderRow{background:linear-gradient(180deg,#ffffff,#fffaf5)}
-.adminPanelCard .panel button,.adminPanelCard .panel select,.adminPanelCard .panel input{width:100%}
+.adminPanelCard .panel button,.adminPanelCard .panel select,.adminPanelCard .panel input,.adminPanelCard .panel textarea{width:100%}
 
 #feedbackBox{font-weight:700;transition:background .2s ease,border-color .2s ease,color .2s ease}
 #feedbackBox.feedbackSuccess{background:#f2fff7;border-color:#8cd5ad;color:#155c36}
@@ -293,4 +307,5 @@ body.finalMissionMode{
 @media (max-width: 700px){
   .mascotCardGrid{grid-template-columns:1fr}
   .commandStripInner{align-items:flex-start}
+  .adminPresetActions,.adminClueGrid{grid-template-columns:1fr}
 }

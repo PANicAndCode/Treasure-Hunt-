@@ -36,6 +36,11 @@ function wireAdminEvents(){
   if (el("adminTeamSelect")) el("adminTeamSelect").addEventListener("change", syncAdminFields);
   if (el("adminSaveNameBtn")) el("adminSaveNameBtn").addEventListener("click", adminSaveTeamName);
   if (el("adminCopySnapshotBtn")) el("adminCopySnapshotBtn").addEventListener("click", adminCopySnapshot);
+  if (el("adminPresetSelect")) el("adminPresetSelect").addEventListener("change", () => syncAdminPresetFields());
+  if (el("adminCreatePresetBtn")) el("adminCreatePresetBtn").addEventListener("click", adminCreatePreset);
+  if (el("adminSavePresetBtn")) el("adminSavePresetBtn").addEventListener("click", adminSavePreset);
+  if (el("adminActivatePresetBtn")) el("adminActivatePresetBtn").addEventListener("click", adminActivatePreset);
+  if (el("adminDeletePresetBtn")) el("adminDeletePresetBtn").addEventListener("click", adminDeletePreset);
   if (el("adminGrantNextBtn")) el("adminGrantNextBtn").addEventListener("click", adminGrantNext);
   if (el("adminGrantHintBtn")) el("adminGrantHintBtn").addEventListener("click", adminGrantHint);
   if (el("adminSkipHintTimerBtn")) el("adminSkipHintTimerBtn").addEventListener("click", adminSkipHintTimer);
@@ -192,6 +197,7 @@ async function refreshSharedData(){
   if (!supabaseReady) return;
   await fetchLeaderboard();
   await fetchAllRemoteProgress();
+  await fetchGamePresets({ rerender: false });
   const trackedTeam = teamKey || rememberedTeam();
   const remembered = rememberedTeamRecord();
   const remote = trackedTeam ? (cachedRemoteProgress(trackedTeam) || null) : null;
@@ -216,11 +222,15 @@ async function refreshSharedData(){
   if (teamKey && remote) {
     state = remote;
     await renderAll({ persist: false });
+  } else {
+    renderBoard();
   }
   renderAdminStatuses();
+  renderAdminPresetStatus();
 }
 
 (async function boot(){
+  loadLocalPresetCache();
   renderGateTeams(null);
   populateMascotOptions();
   setGateMode("join");

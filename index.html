@@ -99,6 +99,23 @@
         <button class="full dangerBtn" id="adminResetAllBtn">Reset full game</button>
       </div>
       <div class="spacer"></div>
+      <div class="adminStatusBlock adminPresetBlock">
+        <h2 class="adminStatusTitle">Game presets</h2>
+        <div class="small" id="adminPresetStatus">Active game: Default Hunt</div>
+        <div class="panel adminPresetPanel">
+          <select id="adminPresetSelect"></select>
+          <input id="adminPresetName" placeholder="Preset name">
+          <div class="adminPresetActions">
+            <button class="primary full" id="adminCreatePresetBtn">Create preset</button>
+            <button class="full" id="adminSavePresetBtn">Save preset changes</button>
+            <button class="full" id="adminActivatePresetBtn">Activate preset</button>
+            <button class="full dangerBtn" id="adminDeletePresetBtn">Delete preset</button>
+          </div>
+          <div class="note" id="adminPresetNote">Edit clue text and locations for slots 1-11, plus hints for slots 1-10. QR mappings stay tied to the same checkpoint numbers.</div>
+          <div class="adminClueEditor" id="adminClueEditor"></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
       <div class="note" id="adminPanelFeedback">Choose a team to manage.</div>
     </div>
   </div>

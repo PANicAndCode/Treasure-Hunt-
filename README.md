@@ -1,6 +1,6 @@
 # Treasure Hunt
 
-This package is a reusable QR-based hunt site with unlimited custom teams, join-or-create team flow, mascot selection, shared live progress, and a random clue order for each team. Clues 1 through 10 are shuffled once per team, and clue 11 stays last for everyone.
+This package is a reusable QR-based hunt site with unlimited custom teams, join-or-create team flow, mascot selection, shared live progress, named game presets, and a random clue order for each team. Clues 1 through 10 are shuffled once per team, and clue 11 stays last for everyone.
 
 ## What is included
 - Website files (`index.html`, `styles.css`, `config.js`, `supabase-config.js`)
@@ -23,6 +23,8 @@ This package is a reusable QR-based hunt site with unlimited custom teams, join-
 - The admin view is available from the opening screen and the top bar.
 - `Leave this device` is admin-only.
 - The admin panel can reset one team or wipe the full game.
+- The admin panel can save multiple named game presets, switch the live preset, and delete old custom presets.
+- Each preset can edit clue text, location, and hints for clues 1 through 10. Clue 11 stays the final clue, but its clue text and location are editable.
 - Map features are intentionally disabled in this generic build.
 - The first three finishers can be sent to the host for the 1st, 2nd, and 3rd place prizes.
 - Change `ADMIN_PASSCODE` in the runtime files before using this for a real event.

@@ -502,7 +502,7 @@ async function checkPhotoFile(file){
 }
 function showAdminOverlay(){ const o = el("adminOverlay"); if (o) o.classList.remove("hidden"); }
 function hideAdminOverlay(){ const o = el("adminOverlay"); if (o) o.classList.add("hidden"); }
-function showAdminPanel(){ populateAdminTeams(); syncAdminFields(); applyMapVisibility(); const p = el("adminPanel"); if (p) p.classList.remove("hidden"); }
+function showAdminPanel(){ populateAdminTeams(); syncAdminFields(); renderAdminPresetManager(); applyMapVisibility(); const p = el("adminPanel"); if (p) p.classList.remove("hidden"); }
 function hideAdminPanel(){ const p = el("adminPanel"); if (p) p.classList.add("hidden"); }
 function openAdminPrompt(){
   hideAdminPanel();
@@ -539,6 +539,274 @@ async function syncAdminFields(){
   const local = loadLocalState(team);
   const rawName = remote?.teamName || local.teamName || cachedBoardState(team)?.team_name || teamFallbackLabel(team);
   el("adminTeamName").value = teamIdentity(rawName, team).displayName;
+}
+
+function currentAdminPresetSelection(){
+  return el("adminPresetSelect")?.value || activeGamePresetId || DEFAULT_GAME_PRESET_ID;
+}
+
+function presetNameConflict(name, excludeId = ""){
+  const target = normalizeTeamName(name);
+  return presetList().find(entry => normalizeTeamName(entry.presetName) === target && entry.presetId !== excludeId) || null;
+}
+
+function populateAdminPresetSelect(selectedId = currentAdminPresetSelection()){
+  const select = el("adminPresetSelect");
+  if (!select) return;
+  const options = presetList();
+  const desiredId = options.some(entry => entry.presetId === selectedId)
+    ? selectedId
+    : (options[0]?.presetId || DEFAULT_GAME_PRESET_ID);
+  select.innerHTML = "";
+  options.forEach(entry => {
+    const option = document.createElement("option");
+    option.value = entry.presetId;
+    option.textContent = `${entry.presetName}${entry.presetId === activeGamePresetId ? " (Live)" : ""}`;
+    if (entry.presetId === desiredId) option.selected = true;
+    select.appendChild(option);
+  });
+  select.disabled = options.length === 0;
+}
+
+function appendAdminClueField(grid, clueId, field, labelText, value = "", options = {}){
+  const wrapper = document.createElement("label");
+  wrapper.className = `adminClueLabel${options.fullWidth ? " fullWidth" : ""}`;
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  wrapper.appendChild(label);
+
+  if (options.note){
+    const note = document.createElement("div");
+    note.className = "note";
+    note.textContent = options.note;
+    wrapper.appendChild(note);
+  } else {
+    const control = options.multiline ? document.createElement("textarea") : document.createElement("input");
+    if (!options.multiline) control.type = "text";
+    control.value = value || "";
+    control.dataset.clueId = String(clueId);
+    control.dataset.clueField = field;
+    control.disabled = !!options.disabled;
+    wrapper.appendChild(control);
+  }
+
+  grid.appendChild(wrapper);
+}
+
+function renderAdminClueEditor(preset = presetById(currentAdminPresetSelection())){
+  const mount = el("adminClueEditor");
+  if (!mount) return;
+  mount.innerHTML = "";
+
+  CLUE_IDS.forEach(id => {
+    const key = String(id);
+    const clue = preset.clues[key] || DEFAULT_CLUES[key] || {};
+    const card = document.createElement("div");
+    card.className = `adminClueCard${id === FINAL_CLUE_ID ? " finalClue" : ""}`;
+
+    const header = document.createElement("div");
+    header.className = "adminClueHeader";
+
+    const index = document.createElement("div");
+    index.className = "adminClueIndex";
+    index.textContent = id === FINAL_CLUE_ID ? "Final clue" : `Clue ${id}`;
+
+    const meta = document.createElement("div");
+    meta.className = "adminClueMeta";
+    meta.textContent = id === FINAL_CLUE_ID
+      ? "QR slot 11 • Always last • Hint stays off"
+      : `QR slot ${id}`;
+
+    header.appendChild(index);
+    header.appendChild(meta);
+    card.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = "adminClueGrid";
+    appendAdminClueField(grid, id, "title", "Clue text", clue.title || "", { fullWidth: true, multiline: true });
+    appendAdminClueField(grid, id, "location", "Location", clue.location || "");
+    if (id === FINAL_CLUE_ID) {
+      appendAdminClueField(grid, id, "hint", "Hint", "", {
+        fullWidth: true,
+        note: "The final clue stays hint-free for every team. You can still change its clue text and location."
+      });
+    } else {
+      appendAdminClueField(grid, id, "hint", "Hint", clue.hint || "", { fullWidth: true, multiline: true });
+    }
+    card.appendChild(grid);
+    mount.appendChild(card);
+  });
+}
+
+function syncAdminPresetFields(selectedId = currentAdminPresetSelection()){
+  const select = el("adminPresetSelect");
+  const preset = presetById(selectedId);
+  if (select && select.value !== preset.presetId) select.value = preset.presetId;
+  if (el("adminPresetName")) el("adminPresetName").value = preset.presetName;
+  renderAdminClueEditor(preset);
+  renderAdminPresetStatus();
+
+  const activateBtn = el("adminActivatePresetBtn");
+  if (activateBtn) activateBtn.disabled = preset.presetId === activeGamePresetId;
+
+  const deleteBtn = el("adminDeletePresetBtn");
+  if (deleteBtn) deleteBtn.disabled = preset.presetId === DEFAULT_GAME_PRESET_ID || presetList().length <= 1;
+
+  const note = el("adminPresetNote");
+  if (note) {
+    const liveState = preset.presetId === activeGamePresetId
+      ? "This preset is live right now."
+      : "This preset is saved but not live yet.";
+    const deleteState = preset.presetId === DEFAULT_GAME_PRESET_ID
+      ? "The default preset cannot be deleted."
+      : "You can delete this preset later if you do not need it.";
+    note.textContent = `${liveState} ${deleteState} ${presetStorageMessage()}`;
+  }
+}
+
+function renderAdminPresetManager(selectedId = currentAdminPresetSelection()){
+  populateAdminPresetSelect(selectedId);
+  syncAdminPresetFields(selectedId);
+}
+
+function readAdminPresetDraft(selectedId = currentAdminPresetSelection()){
+  const existing = presetById(selectedId);
+  const presetName = (el("adminPresetName")?.value || existing.presetName || DEFAULT_GAME_PRESET_NAME).trim() || existing.presetName || DEFAULT_GAME_PRESET_NAME;
+  const clues = {};
+
+  CLUE_IDS.forEach(id => {
+    const key = String(id);
+    const base = existing.clues[key] || DEFAULT_CLUES[key] || {};
+    const titleInput = document.querySelector(`[data-clue-id="${id}"][data-clue-field="title"]`);
+    const locationInput = document.querySelector(`[data-clue-id="${id}"][data-clue-field="location"]`);
+    const hintInput = document.querySelector(`[data-clue-id="${id}"][data-clue-field="hint"]`);
+    clues[key] = {
+      title: String(titleInput?.value || base.title || `Clue ${id}`).trim() || String(base.title || `Clue ${id}`),
+      location: String(locationInput?.value || base.location || `Checkpoint ${id}`).trim() || String(base.location || `Checkpoint ${id}`),
+      hint: id === FINAL_CLUE_ID
+        ? String(base.hint || DEFAULT_CLUES[key]?.hint || "")
+        : (String(hintInput?.value || base.hint || "").trim() || String(base.hint || "")),
+      zone: cloneClueValue(DEFAULT_CLUES[key]?.zone || base.zone || {}),
+      noHint: id === FINAL_CLUE_ID
+    };
+  });
+
+  return normalizePresetRecord({
+    presetId: existing.presetId,
+    presetName,
+    clues,
+    isActive: existing.presetId === activeGamePresetId,
+    createdAt: existing.createdAt || Date.now(),
+    updatedAt: Date.now()
+  }, existing.presetId);
+}
+
+async function adminCreatePreset(){
+  const rawName = (el("adminPresetName")?.value || "").trim();
+  if (!rawName){
+    el("adminPanelFeedback").textContent = "Enter a preset name first.";
+    return;
+  }
+  if (presetNameConflict(rawName)){
+    el("adminPanelFeedback").textContent = "That preset name already exists.";
+    return;
+  }
+
+  const draft = readAdminPresetDraft(currentAdminPresetSelection());
+  const nextId = presetId();
+  const result = await savePresetRecord({
+    ...draft,
+    presetId: nextId,
+    presetName: rawName,
+    isActive: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+
+  renderAdminPresetManager(nextId);
+  await renderAll({ persist: false });
+  el("adminPanelFeedback").textContent = result.ok
+    ? (result.localOnly ? "Preset created on this device. Run the updated SQL to sync presets everywhere." : "Preset created and saved.")
+    : "Preset was created on this device, but shared preset sync failed.";
+}
+
+async function adminSavePreset(){
+  const presetIdValue = currentAdminPresetSelection();
+  if (!presetIdValue){
+    el("adminPanelFeedback").textContent = "Pick a preset first.";
+    return;
+  }
+
+  const draft = readAdminPresetDraft(presetIdValue);
+  if (!draft.presetName){
+    el("adminPanelFeedback").textContent = "Enter a preset name first.";
+    return;
+  }
+  if (presetNameConflict(draft.presetName, presetIdValue)){
+    el("adminPanelFeedback").textContent = "That preset name already exists.";
+    return;
+  }
+
+  const result = await savePresetRecord(draft);
+  renderAdminPresetManager(presetIdValue);
+  await renderAll({ persist: false });
+  el("adminPanelFeedback").textContent = result.ok
+    ? (result.localOnly
+      ? (presetIdValue === activeGamePresetId ? "Live preset updated on this device. Run the updated SQL to sync it everywhere." : "Preset saved on this device.")
+      : (presetIdValue === activeGamePresetId ? "Live preset updated everywhere." : "Preset saved."))
+    : "Preset changes were kept on this device, but shared preset sync failed.";
+}
+
+async function adminActivatePreset(){
+  const presetIdValue = currentAdminPresetSelection();
+  if (!presetIdValue){
+    el("adminPanelFeedback").textContent = "Pick a preset first.";
+    return;
+  }
+
+  const draft = readAdminPresetDraft(presetIdValue);
+  if (!draft.presetName){
+    el("adminPanelFeedback").textContent = "Enter a preset name first.";
+    return;
+  }
+  if (presetNameConflict(draft.presetName, presetIdValue)){
+    el("adminPanelFeedback").textContent = "That preset name already exists.";
+    return;
+  }
+
+  const result = await savePresetRecord(draft, { activate: true });
+  renderAdminPresetManager(presetIdValue);
+  await renderAll({ persist: false });
+  el("adminPanelFeedback").textContent = result.ok
+    ? (result.localOnly ? `Activated ${draft.presetName} on this device. Run the updated SQL to make it live everywhere.` : `${draft.presetName} is now the live game.`)
+    : "Preset switched on this device, but shared activation failed.";
+}
+
+async function adminDeletePreset(){
+  const presetIdValue = currentAdminPresetSelection();
+  if (!presetIdValue){
+    el("adminPanelFeedback").textContent = "Pick a preset first.";
+    return;
+  }
+  if (presetIdValue === DEFAULT_GAME_PRESET_ID){
+    el("adminPanelFeedback").textContent = "The default preset cannot be deleted.";
+    return;
+  }
+  if (presetList().length <= 1){
+    el("adminPanelFeedback").textContent = "You need at least one preset.";
+    return;
+  }
+
+  const preset = presetById(presetIdValue);
+  if (!window.confirm(`Delete the preset "${preset.presetName}"?`)) return;
+
+  const result = await deletePresetRecord(presetIdValue);
+  const nextSelection = result.fallbackPresetId || activeGamePresetId || DEFAULT_GAME_PRESET_ID;
+  renderAdminPresetManager(nextSelection);
+  await renderAll({ persist: false });
+  el("adminPanelFeedback").textContent = result.ok
+    ? (result.localOnly ? "Preset deleted on this device." : "Preset deleted.")
+    : "The preset was removed locally, but the shared delete failed.";
 }
 
 async function adminCopySnapshot(){
